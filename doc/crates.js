@@ -1,0 +1,1 @@
+window.ALL_CRATES = ["ccc_lib","ccc_senior"];

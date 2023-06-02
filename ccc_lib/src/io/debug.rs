@@ -39,13 +39,13 @@ mod test {
     use super::*;
 
     #[test]
-    fn test_debug_level_default() {
+    fn debug_level_default() {
         let d = DebugLevel::default();
         assert_eq!(DebugLevel::Warn, d);
     }
 
     #[test]
-    fn test_debug_level_display() {
+    fn debug_level_display() {
         assert_eq!(DebugLevel::Info.to_string(), "INFO");
         assert_eq!(DebugLevel::Warn.to_string(), "WARN");
         assert_eq!(DebugLevel::Error.to_string(), "ERRO");
@@ -53,7 +53,7 @@ mod test {
     }
 
     #[test]
-    fn test_debug_level_cmp() {
+    fn debug_level_cmp() {
         let lvl = DebugLevel::Warn;
         assert_eq!(true, lvl.can_trigger(&DebugLevel::Error));
         assert_eq!(false, lvl.can_trigger(&DebugLevel::Info));

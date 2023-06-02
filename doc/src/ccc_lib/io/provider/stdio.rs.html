@@ -82,7 +82,7 @@
 }
 
 <span class="kw">impl </span>IoReader <span class="kw">for </span>StdIoProvider {
-    <span class="kw">fn </span>read_line(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
+    <span class="kw">fn </span>read_line(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="prelude-ty">Option</span>&lt;String&gt; {
         <span class="kw">let </span><span class="kw-2">mut </span>input_string = String::new();
         <span class="kw">if </span><span class="self">self</span>.multi_threads {
             stdin()
@@ -99,7 +99,7 @@
 }
 
 <span class="kw">impl </span>IoWriter <span class="kw">for </span>StdIoProvider {
-    <span class="kw">fn </span>write_line(<span class="kw-2">&amp;</span><span class="self">self</span>, content: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;bool&gt; {
+    <span class="kw">fn </span>write_line(<span class="kw-2">&amp;mut </span><span class="self">self</span>, content: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Option</span>&lt;bool&gt; {
         <span class="kw">if </span><span class="self">self</span>.multi_threads {
             stdout()
                 .lock()
@@ -143,7 +143,7 @@
     </span><span class="kw">fn </span>std_io_writer_privider_withlock() {
         <span class="kw">let </span>std_io_writer_pack = StdIoProvider::new_writer(<span class="bool-val">true</span>);
         <span class="macro">assert!</span>(std_io_writer_pack.is_some());
-        <span class="kw">let </span>std_io_writer = std_io_writer_pack.unwrap();
+        <span class="kw">let </span><span class="kw-2">mut </span>std_io_writer = std_io_writer_pack.unwrap();
         <span class="kw">let </span>result = std_io_writer.write_line(<span class="string">&quot;Hello World&quot;</span>);
         <span class="macro">assert!</span>(result.is_some());
     }

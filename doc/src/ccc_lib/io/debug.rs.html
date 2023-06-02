@@ -100,13 +100,13 @@
     <span class="kw">use super</span>::<span class="kw-2">*</span>;
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_debug_level_default() {
+    </span><span class="kw">fn </span>debug_level_default() {
         <span class="kw">let </span>d = DebugLevel::default();
         <span class="macro">assert_eq!</span>(DebugLevel::Warn, d);
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_debug_level_display() {
+    </span><span class="kw">fn </span>debug_level_display() {
         <span class="macro">assert_eq!</span>(DebugLevel::Info.to_string(), <span class="string">&quot;INFO&quot;</span>);
         <span class="macro">assert_eq!</span>(DebugLevel::Warn.to_string(), <span class="string">&quot;WARN&quot;</span>);
         <span class="macro">assert_eq!</span>(DebugLevel::Error.to_string(), <span class="string">&quot;ERRO&quot;</span>);
@@ -114,7 +114,7 @@
     }
 
     <span class="attr">#[test]
-    </span><span class="kw">fn </span>test_debug_level_cmp() {
+    </span><span class="kw">fn </span>debug_level_cmp() {
         <span class="kw">let </span>lvl = DebugLevel::Warn;
         <span class="macro">assert_eq!</span>(<span class="bool-val">true</span>, lvl.can_trigger(<span class="kw-2">&amp;</span>DebugLevel::Error));
         <span class="macro">assert_eq!</span>(<span class="bool-val">false</span>, lvl.can_trigger(<span class="kw-2">&amp;</span>DebugLevel::Info));

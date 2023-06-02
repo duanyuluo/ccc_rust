@@ -7,7 +7,7 @@ pub struct StdIoProvider {
 }
 
 impl IoReader for StdIoProvider {
-    fn read_line(&self) -> Option<String> {
+    fn read_line(&mut self) -> Option<String> {
         let mut input_string = String::new();
         if self.multi_threads {
             stdin()
@@ -24,7 +24,7 @@ impl IoReader for StdIoProvider {
 }
 
 impl IoWriter for StdIoProvider {
-    fn write_line(&self, content: &str) -> Option<bool> {
+    fn write_line(&mut self, content: &str) -> Option<bool> {
         if self.multi_threads {
             stdout()
                 .lock()
@@ -68,7 +68,7 @@ mod tests {
     fn std_io_writer_privider_withlock() {
         let std_io_writer_pack = StdIoProvider::new_writer(true);
         assert!(std_io_writer_pack.is_some());
-        let std_io_writer = std_io_writer_pack.unwrap();
+        let mut std_io_writer = std_io_writer_pack.unwrap();
         let result = std_io_writer.write_line("Hello World");
         assert!(result.is_some());
     }

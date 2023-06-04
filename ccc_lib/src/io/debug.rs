@@ -25,7 +25,7 @@ impl Display for DebugLevel {
 }
 
 impl DebugLevel {
-    fn can_trigger(&self, current_level: &DebugLevel) -> bool {
+    pub fn can_trigger(&self, current_level: &DebugLevel) -> bool {
         if (*self as u8) > *current_level as u8 {
             false
         } else {

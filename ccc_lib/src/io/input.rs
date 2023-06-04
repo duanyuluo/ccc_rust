@@ -40,7 +40,7 @@ impl TcFileInput {
 
     /// Read vec that input in a single line.
     /// sep_by_space: words seperated by " "(space) or char in String.
-    pub fn read_vec(&mut self, sep_by_space: bool) -> Vec<String> {
+    pub fn read_strvec(&mut self, sep_by_space: bool) -> Vec<String> {
         let ln = self.file_handle.read_line().unwrap();
         if sep_by_space {
             ln.split_whitespace().map(|s| String::from(s)).collect()
@@ -56,8 +56,8 @@ impl TcFileInput {
 
     /// Read and type casting T to vec that input in a single line.
     /// T: std::str::FromStr + Default
-    pub fn read_vec_t<T: std::str::FromStr + Default>(&mut self) -> Vec<T> {
-        self.read_vec(true)
+    pub fn read_vec<T: std::str::FromStr + Default>(&mut self) -> Vec<T> {
+        self.read_strvec(true)
             .iter()
             .map(|s| s.parse::<T>().unwrap_or_default())
             .collect()
@@ -66,9 +66,10 @@ impl TcFileInput {
 
 /// Read and type casting $type(2nd arg) to tuple that input in a single line.
 /// eg. let (a, b) = read_tuple_t(io_reader, i32);
-macro_rules! read_tuple_t {
+#[allow(unused_macros)]
+macro_rules! read_tuple {
     ($obj:ident, $type:ty) => {
-        $obj.read_vec_t::<$type>()
+        $obj.read_vec::<$type>()
             .into_iter()
             .collect_tuple()
             .unwrap()
@@ -87,16 +88,16 @@ mod test {
         assert_eq!(input.read_int(), 14);
         assert_eq!(input.read_int(), 16);
         assert_eq!(
-            input.read_vec(false),
+            input.read_strvec(false),
             vec!["I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I", "I"]
         );
         assert_eq!(
-            input.read_vec(false),
+            input.read_strvec(false),
             vec!["I", ".", ".", ".", ".", ".", ".", "I", ".", ".", ".", ".", ".", ".", ".", "I"]
         );
-        assert_eq!(input.read_vec(true), vec!["a", "b", "c", "xyz"]);
-        assert_eq!(input.read_vec_t::<i16>(), vec![1, 2, 3]);
-        let (a, b, c) = read_tuple_t!(input, i16);
+        assert_eq!(input.read_strvec(true), vec!["a", "b", "c", "xyz"]);
+        assert_eq!(input.read_vec::<i16>(), vec![1, 2, 3]);
+        let (a, b, c) = read_tuple!(input, i16);
         assert_eq!((a, b, c), (1, 2, 3));
     }
 }

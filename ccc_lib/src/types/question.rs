@@ -37,7 +37,7 @@ pub struct Question {
     pub level: QuestionType,
     pub num: u8,
     pub title: String,
-    description: String,
+    pub description: String,
 }
 
 impl Question {

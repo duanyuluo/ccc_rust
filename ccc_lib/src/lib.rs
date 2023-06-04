@@ -13,3 +13,5 @@ pub mod types;
 
 // module io contain input/output, log, debug for ccc.
 pub mod io;
+
+pub mod tbl;

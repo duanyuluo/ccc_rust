@@ -14,19 +14,16 @@
 //  │ │  │                        <- Inner           First        Middle         Last
 //  │ │  └───────── Cell Text
 //  │ └──────────── Cell Margin
-//  └────────────── CH (InnerCellHighlight)
+//  └────────────── CH (InnerMark)
 //
-extern crate strfmt;
-use std::{collections::HashMap, usize};
-use strfmt::Format;
 
 /// Table Border Char List
 pub const TABLE_BORDER_CHARS: [&'static str; 17] = [
     "┌", "┐", "└", "┘", // LT, RT, LB, RB <- Corner
     "├", "┤", "┬", "┴", // LM, RM, TM, BM <- Seperator Border
     "│", "│", "─", "─", // LL, RR, TT, BB <- Border
-    "│", "─", "┼", "█", // VV, HH, MM, CC <- SepInner
-    " ",
+    "│", "─", "┼", "█", // VV, HH, MM, CH <- SepInner
+    " ", // CM
 ];
 
 /// Cell Side Margin Width
@@ -55,7 +52,7 @@ pub enum TablePos {
     InnerVert, // Inner
     InnerHori,
     InnerCross,
-    InnerCellHighlight,
+    InnerMark,
     InnerMargin,
 }
 
@@ -74,7 +71,7 @@ const BB: usize = TablePos::BorderBottom as usize;
 const IV: usize = TablePos::InnerVert as usize;
 const IH: usize = TablePos::InnerHori as usize;
 const IC: usize = TablePos::InnerCross as usize;
-const CH: usize = TablePos::InnerCellHighlight as usize;
+const CH: usize = TablePos::InnerMark as usize;
 const CM: usize = TablePos::InnerMargin as usize;
 
 macro_rules! bdr {
@@ -100,24 +97,24 @@ fn cell_patterns(
     let patterns = match (pos_group, column_type) {
         (TblGrp::HeadTop, ColumnType::LineNum) => ("", "", bdr!(CM), bdr!(CM)), // LineNum
         (TblGrp::HeadTop, ColumnType::First) => (bdr!(LT), bdr!(TM), bdr!(TT), bdr!(TT)), // First
-        (TblGrp::HeadTop, ColumnType::Middle) => (bdr!(TM), bdr!(TM), bdr!(TT), bdr!(TT)), // Middle
-        (TblGrp::HeadTop, ColumnType::Last) => (bdr!(TM), bdr!(RT), bdr!(TT), bdr!(TT)), // Last
+        (TblGrp::HeadTop, ColumnType::Middle) => ("", bdr!(TM), bdr!(TT), bdr!(TT)), // Middle
+        (TblGrp::HeadTop, ColumnType::Last) => ("", bdr!(RT), bdr!(TT), bdr!(TT)), // Last
         (TblGrp::HeadLine, ColumnType::LineNum) => ("", "", bdr!(CM), bdr!(CM)), // LineNum
         (TblGrp::HeadLine, ColumnType::First) => (bdr!(LL), bdr!(IV), bdr!(CM), bdr!(CM)), // First
-        (TblGrp::HeadLine, ColumnType::Middle) => (bdr!(IV), bdr!(IV), bdr!(CM), bdr!(CM)), // Middle
-        (TblGrp::HeadLine, ColumnType::Last) => (bdr!(IV), bdr!(RR), bdr!(CM), bdr!(CM)),   // Last
+        (TblGrp::HeadLine, ColumnType::Middle) => ("", bdr!(IV), bdr!(CM), bdr!(CM)), // Middle
+        (TblGrp::HeadLine, ColumnType::Last) => ("", bdr!(RR), bdr!(CM), bdr!(CM)), // Last
         (TblGrp::BodySep, ColumnType::LineNum) => ("", "", bdr!(CM), bdr!(CM)), // LineNum
         (TblGrp::BodySep, ColumnType::First) => (bdr!(LM), bdr!(IC), bdr!(IH), bdr!(IH)), // First
-        (TblGrp::BodySep, ColumnType::Middle) => (bdr!(IC), bdr!(IC), bdr!(IH), bdr!(IH)), // Middle
-        (TblGrp::BodySep, ColumnType::Last) => (bdr!(IC), bdr!(RM), bdr!(IH), bdr!(IH)), // Last
+        (TblGrp::BodySep, ColumnType::Middle) => ("", bdr!(IC), bdr!(IH), bdr!(IH)), // Middle
+        (TblGrp::BodySep, ColumnType::Last) => ("", bdr!(RM), bdr!(IH), bdr!(IH)), // Last
         (TblGrp::BodyLine, ColumnType::LineNum) => ("", "", bdr!(CM), bdr!(CM)), // LineNum
         (TblGrp::BodyLine, ColumnType::First) => (bdr!(LL), bdr!(IV), bdr!(CH), bdr!(CM)), // First
-        (TblGrp::BodyLine, ColumnType::Middle) => (bdr!(IV), bdr!(IV), bdr!(CH), bdr!(CM)), // Middle
-        (TblGrp::BodyLine, ColumnType::Last) => (bdr!(IV), bdr!(RR), bdr!(CH), bdr!(CM)),   // Last
+        (TblGrp::BodyLine, ColumnType::Middle) => ("", bdr!(IV), bdr!(CH), bdr!(CM)), // Middle
+        (TblGrp::BodyLine, ColumnType::Last) => ("", bdr!(RR), bdr!(CH), bdr!(CM)), // Last
         (TblGrp::BodyBtm, ColumnType::LineNum) => ("", "", bdr!(CM), bdr!(CM)), // LineNum
         (TblGrp::BodyBtm, ColumnType::First) => (bdr!(LB), bdr!(BM), bdr!(BB), bdr!(BB)), // First
-        (TblGrp::BodyBtm, ColumnType::Middle) => (bdr!(BM), bdr!(BM), bdr!(BB), bdr!(BB)), // Middle
-        (TblGrp::BodyBtm, ColumnType::Last) => (bdr!(BM), bdr!(RB), bdr!(BB), bdr!(BB)), // Last
+        (TblGrp::BodyBtm, ColumnType::Middle) => ("", bdr!(BM), bdr!(BB), bdr!(BB)), // Middle
+        (TblGrp::BodyBtm, ColumnType::Last) => ("", bdr!(RB), bdr!(BB), bdr!(BB)), // Last
         (_, _) => ("", "", "", ""),
     };
     patterns
@@ -305,59 +302,92 @@ impl TableTool {
         };
 
         // choice cell format pattern item: left_border, right_border, left_margin, right_margin
-        let (left_border, right_border, left_margin, right_margin) =
+        let (left_border, right_border, left_margin, mut right_margin) =
             cell_patterns(tbl_grp, col_type);
 
         // adjust cell text or border for column width
         let column_cfg = &self.tbl_cfg.columns[column_idx];
-        let (column_align, column_width) = (column_cfg.align, column_cfg.width);
+        let (column_align, col_width) = (column_cfg.align, column_cfg.width);
 
-        let cell_full_text: String;
+        // trim cell_text to column width.
+        // if extend out of cell, mark "~" at the end of cell.
+        let extend_cell = cell_txt.len() > col_width;
+        let mut rdr_txt: String;
+        if extend_cell {
+            rdr_txt = cell_txt[0..col_width].to_string();
+            right_margin = "~";
+        } else {
+            rdr_txt = cell_txt.to_string();
+        }
+
+        // format cell text
         let need_fill_border =
             tbl_grp == TblGrp::HeadTop || tbl_grp == TblGrp::BodySep || tbl_grp == TblGrp::BodyBtm;
         if col_type == ColumnType::LineNum {
             if need_fill_border {
-                cell_full_text = format!("{:width$}", "", width = column_width);
+                rdr_txt = format!("{:width$}", "", width = col_width);
             } else {
-                cell_full_text = format!("{:0>width$}", cell_txt, width = column_width);
+                rdr_txt = format!("{:0>width$}", rdr_txt, width = col_width);
             }
         } else {
             if need_fill_border {
-                cell_full_text = left_margin.repeat(column_width); // two margins
+                rdr_txt = left_margin.repeat(col_width); // two margins
             } else {
-                cell_full_text = match column_align {
-                    ColumnAlign::Left => format!("{:<width$}", cell_txt, width = column_width),
-                    ColumnAlign::Center => format!("{:^width$}", cell_txt, width = column_width),
-                    ColumnAlign::Right => format!("{:>width$}", cell_txt, width = column_width),
+                rdr_txt = match column_align {
+                    ColumnAlign::Left => {
+                        format!("{:<width$}", rdr_txt, width = col_width)
+                    }
+                    ColumnAlign::Center => {
+                        format!("{:^width$}", rdr_txt, width = col_width)
+                    }
+                    ColumnAlign::Right => {
+                        format!("{:>width$}", rdr_txt, width = col_width)
+                    }
                 };
             }
         }
 
         // format line
-        format!("{left_border}{left_margin}{cell_full_text}{right_margin}{right_border}")
+        format!("{left_border}{left_margin}{rdr_txt}{right_margin}{right_border}")
     }
 
-    pub fn fmt_line(&self, _grp: TblGrp) -> String {
-        todo!()
+    /// Format Table Whole Line
+    pub fn fmt_body_line(&self, tbl_grp: TblGrp, all_cells: Vec<&str>) -> String {
+        assert!(all_cells.len() == self.tbl_cfg.columns.len());
+        assert!(tbl_grp == TblGrp::BodyLine || tbl_grp == TblGrp::HeadLine);
+        let mut line_render = String::new();
+        for (idx, _column) in self.tbl_cfg.columns.iter().enumerate() {
+            let line = self.fmt_cell(tbl_grp, idx, &all_cells[idx]);
+            line_render.push_str(line.as_str());
+        }
+        line_render
     }
 
-    // pub fn fmt_by_group(_grp: TblGrp, columns: Vec<TableColumnConfig>) -> String {
-    //     for (_col_idx, _column) in columns.iter().enumerate() {
-    //         // let col_width = column.width + 2 * TABLE_CELL_MARGIN as usize;
-    //     }
-    //     let line_fmt_pattern = format!(
-    //         "{}[v1]{}[v2]{}",
-    //         TableTool::char_at_tblpos(TablePos::InnerCellHighlight),
-    //         TableTool::char_at_tblpos(TablePos::BorderLeft),
-    //         TableTool::char_at_tblpos(TablePos::InnerCross)
-    //     )
-    //     .replace("[", "{")
-    //     .replace("]", "}");
-    //     let mut vars: HashMap<String, &str> = HashMap::new();
-    //     vars.insert("v1".to_string(), "a");
-    //     vars.insert("v2".to_string(), "b");
-    //     line_fmt_pattern.format(&vars).unwrap()
-    // }
+    /// Format Table Buildin Line
+    pub fn fmt_buildin_line(&self, tbl_grp: TblGrp) -> String {
+        assert!(
+            tbl_grp == TblGrp::HeadTop
+                || tbl_grp == TblGrp::HeadLine
+                || tbl_grp == TblGrp::BodySep
+                || tbl_grp == TblGrp::BodyBtm
+        );
+
+        let cell_text_list: Vec<&str> = match tbl_grp {
+            TblGrp::HeadLine => self
+                .tbl_cfg
+                .columns
+                .iter()
+                .map(|i| i.title.as_str())
+                .collect(),
+            _ => self.tbl_cfg.columns.iter().map(|_| "").collect(),
+        };
+        let mut line_render = String::new();
+        for (idx, _column) in self.tbl_cfg.columns.iter().enumerate() {
+            let line = self.fmt_cell(tbl_grp, idx, &cell_text_list[idx]);
+            line_render.push_str(line.as_str());
+        }
+        line_render
+    }
 }
 
 #[cfg(test)]
@@ -366,7 +396,7 @@ mod test {
 
     #[test]
     fn table_border_char() {
-        assert_eq!(TableTool::char_at_tblpos(TablePos::InnerCellHighlight), "█");
+        assert_eq!(TableTool::char_at_tblpos(TablePos::InnerMark), "█");
         assert_eq!(TableTool::char_at_tblpos(TablePos::BorderLeft), "│");
         assert_eq!(TableTool::char_at_tblpos(TablePos::InnerCross), "┼");
     }
@@ -419,7 +449,7 @@ mod test {
     }
 
     #[test]
-    fn table_fmt_tool() {
+    fn table_tool_fmt_cell() {
         let mut tbl_cfg = TableConfig::start_build();
         tbl_cfg.new_column(10, "First Col", ColumnAlign::Left);
         tbl_cfg.auto_column("Left Column ");
@@ -436,32 +466,80 @@ mod test {
 
         assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 0, "xx"), "    ");
         assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 1, "xx"), "┌────────────┬");
-        assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 2, "xx"), "┬──────────────┬");
-        assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 3, "xx"), "┬─────────────────┬");
-        assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 4, "xx"), "┬───────────────┐");
+        assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 2, "xx"), "──────────────┬");
+        assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 3, "xx"), "─────────────────┬");
+        assert_eq!(tb.fmt_cell(TblGrp::HeadTop, 4, "xx"), "───────────────┐");
 
         assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 0, "1"), " 01 ");
         assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 1, "x"), "│ x          │");
-        assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 2, "x"), "│ x            │");
-        assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 3, "x"), "│        x        │");
-        assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 4, "x"), "│             x │");
+        assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 2, "x"), " x            │");
+        assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 3, "x"), "        x        │");
+        assert_eq!(tb.fmt_cell(TblGrp::HeadLine, 4, "x"), "             x │");
 
         assert_eq!(tb.fmt_cell(TblGrp::BodySep, 0, "xx"), "    ");
         assert_eq!(tb.fmt_cell(TblGrp::BodySep, 1, "xx"), "├────────────┼");
-        assert_eq!(tb.fmt_cell(TblGrp::BodySep, 2, "xx"), "┼──────────────┼");
-        assert_eq!(tb.fmt_cell(TblGrp::BodySep, 3, "xx"), "┼─────────────────┼");
-        assert_eq!(tb.fmt_cell(TblGrp::BodySep, 4, "xx"), "┼───────────────┤");
+        assert_eq!(tb.fmt_cell(TblGrp::BodySep, 2, "xx"), "──────────────┼");
+        assert_eq!(tb.fmt_cell(TblGrp::BodySep, 3, "xx"), "─────────────────┼");
+        assert_eq!(tb.fmt_cell(TblGrp::BodySep, 4, "xx"), "───────────────┤");
 
         assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 0, "1"), " 01 ");
         assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 1, "x"), "│█x          │");
-        assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 2, "x"), "│█x            │");
-        assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 3, "x"), "│█       x        │");
-        assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 4, "x"), "│█            x │");
+        assert_eq!(
+            tb.fmt_cell(
+                TblGrp::BodyLine,
+                2,
+                "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+            ),
+            "█xxxxxxxxxxxx~│"
+        );
+        assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 3, "x"), "█       x        │");
+        assert_eq!(tb.fmt_cell(TblGrp::BodyLine, 4, "x"), "█            x │");
 
         assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 0, ""), "    ");
         assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 1, "xx"), "└────────────┴");
-        assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 2, "xx"), "┴──────────────┴");
-        assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 3, "xx"), "┴─────────────────┴");
-        assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 4, "xx"), "┴───────────────┘");
+        assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 2, "xx"), "──────────────┴");
+        assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 3, "xx"), "─────────────────┴");
+        assert_eq!(tb.fmt_cell(TblGrp::BodyBtm, 4, "xx"), "───────────────┘");
+    }
+
+    #[test]
+    fn table_tool_fmt_line() {
+        let mut tbl_cfg = TableConfig::start_build();
+        tbl_cfg.new_column(10, "First", ColumnAlign::Left);
+        tbl_cfg.auto_column("Left        ");
+        tbl_cfg.auto_column(" Middle        ");
+        tbl_cfg.auto_column("        Right");
+        tbl_cfg.build_done(true);
+
+        let tb = TableTool::attach(tbl_cfg);
+        assert_eq!(
+            tb.fmt_buildin_line(TblGrp::HeadTop),
+            "    ┌────────────┬──────────────┬─────────────────┬───────────────┐"
+        );
+        assert_eq!(
+            tb.fmt_buildin_line(TblGrp::HeadLine),
+            " 0# │ First      │ Left         │     Middle      │         Right │"
+        );
+        assert_eq!(
+            tb.fmt_buildin_line(TblGrp::BodySep),
+            "    ├────────────┼──────────────┼─────────────────┼───────────────┤"
+        );
+        assert_eq!(
+            tb.fmt_body_line(
+                TblGrp::BodyLine,
+                vec![
+                    "1",
+                    "ooooooooooooooooooooooooooooooooooooooooo",
+                    "x",
+                    "y",
+                    "z",
+                ]
+            ),
+            " 01 │█oooooooooo~│█x            │█       y        │█            z │"
+        );
+        assert_eq!(
+            tb.fmt_buildin_line(TblGrp::BodyBtm),
+            "    └────────────┴──────────────┴─────────────────┴───────────────┘"
+        );
     }
 }

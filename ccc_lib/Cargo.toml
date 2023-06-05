@@ -8,4 +8,4 @@ edition = "2021"
 [dependencies]
 itertools = "0.10.5"
 colored = "2.0.0"
-strfmt = "0.2.4"
+# strfmt = "0.2.4"

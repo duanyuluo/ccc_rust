@@ -17,6 +17,8 @@
 //  └────────────── CH (InnerMark)
 //
 
+use std::cmp;
+
 /// Table Border Char List
 pub const TABLE_BORDER_CHARS: [&'static str; 17] = [
     "┌", "┐", "└", "┘", // LT, RT, LB, RB <- Corner
@@ -86,10 +88,8 @@ macro_rules! bdr {
 /// HeadLine     __ __ CM CM   LL IV CM CM   IV IV CM CM    IV RR CM CM  
 /// BodySep      __ __ CM CM   LM IC IH IH   IC IC IH IH    IC RM IH IH
 /// BodyLine     __ __ CM CM   LL IV CH CM   IV IV CH CM    IV RR CH CM
-/// BodyBtm   __ __ CM CM   LB BM BB BB   BM BM BB BB    BM RB BB BB
+/// BodyBtm      __ __ CM CM   LB BM BB BB   BM BM BB BB    BM RB BB BB
 ///
-/// CELL_PATTERNS[PosGroup][ColumnType]: Vec<[(&str, &str, &str, &str); 4]>
-// const CELL_PATTERNS: Vec<[(&str, &str, &str, &str); 4]> = vec![
 fn cell_patterns(
     pos_group: TblGrp,
     column_type: ColumnType,
@@ -115,6 +115,10 @@ fn cell_patterns(
         (TblGrp::BodyBtm, ColumnType::First) => (bdr!(LB), bdr!(BM), bdr!(BB), bdr!(BB)), // First
         (TblGrp::BodyBtm, ColumnType::Middle) => ("", bdr!(BM), bdr!(BB), bdr!(BB)), // Middle
         (TblGrp::BodyBtm, ColumnType::Last) => ("", bdr!(RB), bdr!(BB), bdr!(BB)), // Last
+        (TblGrp::Summary, ColumnType::LineNum) => ("", "", bdr!(CM), bdr!(CM)), // LineNum
+        (TblGrp::Summary, ColumnType::First) => (bdr!(CM), bdr!(CM), bdr!(CM), bdr!(CM)), // First
+        (TblGrp::Summary, ColumnType::Middle) => ("", bdr!(CM), bdr!(CM), bdr!(CM)), // Middle
+        (TblGrp::Summary, ColumnType::Last) => ("", bdr!(CM), bdr!(CM), bdr!(CM)), // Last
         (_, _) => ("", "", "", ""),
     };
     patterns
@@ -134,6 +138,7 @@ pub enum TblGrp {
     BodySep,
     BodyLine,
     BodyBtm,
+    Summary,
 }
 
 /// Table Column Alignment
@@ -236,7 +241,7 @@ impl TableConfig {
                 0,
                 TableColumnConfig {
                     width: 2,
-                    title: "#".to_string(),
+                    title: "No".to_string(),
                     align: ColumnAlign::Left,
                     ty: ColumnType::LineNum,
                 },
@@ -311,7 +316,7 @@ impl TableTool {
 
         // trim cell_text to column width.
         // if extend out of cell, mark "~" at the end of cell.
-        let extend_cell = cell_txt.len() > col_width;
+        let extend_cell = col_type != ColumnType::LineNum && cell_txt.len() >= col_width;
         let mut rdr_txt: String;
         if extend_cell {
             rdr_txt = cell_txt[0..col_width].to_string();
@@ -327,7 +332,11 @@ impl TableTool {
             if need_fill_border {
                 rdr_txt = format!("{:width$}", "", width = col_width);
             } else {
-                rdr_txt = format!("{:0>width$}", rdr_txt, width = col_width);
+                if rdr_txt == "" {
+                    rdr_txt = format!("{:>width$}", rdr_txt, width = col_width);
+                } else {
+                    rdr_txt = format!("{:0>width$}", rdr_txt, width = col_width);
+                }
             }
         } else {
             if need_fill_border {
@@ -354,7 +363,11 @@ impl TableTool {
     /// Format Table Whole Line
     pub fn fmt_body_line(&self, tbl_grp: TblGrp, all_cells: Vec<&str>) -> String {
         assert!(all_cells.len() == self.tbl_cfg.columns.len());
-        assert!(tbl_grp == TblGrp::BodyLine || tbl_grp == TblGrp::HeadLine);
+        assert!(
+            tbl_grp == TblGrp::BodyLine
+                || tbl_grp == TblGrp::HeadLine
+                || tbl_grp == TblGrp::Summary
+        );
         let mut line_render = String::new();
         for (idx, _column) in self.tbl_cfg.columns.iter().enumerate() {
             let line = self.fmt_cell(tbl_grp, idx, &all_cells[idx]);
@@ -363,7 +376,69 @@ impl TableTool {
         line_render
     }
 
-    /// Format Table Buildin Line
+    /// Format Table Multi-Lines
+    pub fn fmt_body_mlines(&self, tbl_grp: TblGrp, all_cells: Vec<&str>) -> Vec<String> {
+        assert!(all_cells.len() == self.tbl_cfg.columns.len());
+        assert!(tbl_grp == TblGrp::BodyLine || tbl_grp == TblGrp::HeadLine);
+
+        // 1) prepare slice line cells to multi-lines if some cell's test are too long.
+        //    slice record: col_idx, start, end, guard
+        let mut all_slice: Vec<(usize, usize, usize, usize)> = all_cells
+            .iter()
+            .enumerate()
+            .map(|(i, s)| {
+                (
+                    i,                                                // column index
+                    0,                                                // slice start position
+                    cmp::min(s.len(), self.tbl_cfg.columns[i].width), // slice end position
+                    s.len(),                                          // slice end guard position
+                )
+            })
+            .collect();
+
+        // let slice_cell = move |col_idx| {
+        // let (start, guard) = all_slice[col_idx];
+        // let col_width = self.tbl_cfg.columns[col_idx].width;
+        // cell_txt[start..cmp::min(start + col_width, guard)]
+        // };
+
+        // 2) loop slice cell text until all of them text are rendered.
+        let mut rendered_lines: Vec<String> = Vec::new();
+        loop {
+            // 3) from last slice position, slice every cell's text into current line
+            let cur_line_cells: Vec<&str> = all_cells
+                .iter()
+                .enumerate()
+                .map(|(i, s)| &s[all_slice[i].1..all_slice[i].2]) // slice cell text[start, end]
+                .collect();
+
+            // 4) render current line and then push to multi-lines result vector.
+            let mut cur_rendered_line: String = String::new();
+            cur_rendered_line.push_str(self.fmt_body_line(tbl_grp, cur_line_cells).as_str());
+            rendered_lines.push(cur_rendered_line);
+
+            // 5) update slice records
+            all_slice.iter_mut().for_each(|r| {
+                if r.2 == r.3 {
+                    // if this cell has total rendered
+                    (r.1, r.2) = (r.3, r.3);
+                } else {
+                    // render rest cell test, slice to next text window
+                    r.1 = r.2;
+                    r.2 += cmp::min(self.tbl_cfg.columns[r.0].width, r.3 - r.2);
+                }
+            });
+
+            // 6) break render loop if all of cell have rendered.
+            if all_slice.iter().all(|r| r.1 == r.2 && r.2 == r.3) {
+                break;
+            }
+        }
+        rendered_lines
+    }
+
+    /// Format Table Buildin Line.
+    /// builtin line only in one line.
     pub fn fmt_buildin_line(&self, tbl_grp: TblGrp) -> String {
         assert!(
             tbl_grp == TblGrp::HeadTop
@@ -518,7 +593,7 @@ mod test {
         );
         assert_eq!(
             tb.fmt_buildin_line(TblGrp::HeadLine),
-            " 0# │ First      │ Left         │     Middle      │         Right │"
+            " No │ First      │ Left         │     Middle      │         Right │"
         );
         assert_eq!(
             tb.fmt_buildin_line(TblGrp::BodySep),
@@ -537,9 +612,38 @@ mod test {
             ),
             " 01 │█oooooooooo~│█x            │█       y        │█            z │"
         );
+        let tri = tb.fmt_body_mlines(
+            TblGrp::BodyLine,
+            vec![
+                "2",
+                "1234567890123456789012345",
+                "X",
+                "YYYYYYYYYYYYYYYYYYY",
+                "Z",
+            ],
+        );
+        assert_eq!(
+            tri[0],
+            " 02 │█1234567890~│█X            │█YYYYYYYYYYYYYYY~│█            Z │"
+        );
+        assert_eq!(
+            tri[1],
+            "    │█1234567890~│█             │█     YYYY       │█              │"
+        );
+        assert_eq!(
+            tri[2],
+            "    │█12345      │█             │█                │█              │"
+        );
         assert_eq!(
             tb.fmt_buildin_line(TblGrp::BodyBtm),
             "    └────────────┴──────────────┴─────────────────┴───────────────┘"
+        );
+        assert_eq!(
+            tb.fmt_body_line(
+                TblGrp::Summary,
+                vec!["--", "1,243.0", "-23,432.3", "0.00", "TOTAL",]
+            ),
+            " --   1,243.0      -23,432.3           0.00                 TOTAL  "
         );
     }
 }

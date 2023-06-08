@@ -1,2 +1,2 @@
 [workspace]
-members = ["ccc_lib", "ccc_senior"]
+members = ["lib", "ccc_lib", "ccc_senior"]
